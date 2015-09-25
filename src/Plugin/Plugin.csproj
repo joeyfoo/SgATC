@@ -70,10 +70,16 @@
     <Reference Include="System" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DriveAssist.cs" />
-    <Compile Include="ATP.cs" />
+    <Compile Include="AI.cs" />
+    <Compile Include="Atc.cs" />
+    <Compile Include="AtsP.cs" />
+    <Compile Include="AtsSx.cs" />
+    <Compile Include="Device.cs" />
+    <Compile Include="Eb.cs" />
     <Compile Include="Plugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Sounds.cs" />
+    <Compile Include="Train.cs" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
