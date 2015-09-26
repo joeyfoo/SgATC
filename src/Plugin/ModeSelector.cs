@@ -24,7 +24,7 @@ namespace Plugin
                 return null;
             }
 
-            if (data.Vehicle.Speed.KilometersPerHour > 0.5 || data.Handles.BrakeNotch < train.specs.BrakeNotches+1)
+            if (data.Vehicle.Speed.KilometersPerHour > 0.5 || data.Handles.BrakeNotch < train.specs.BrakeNotches)
             {
                 return -train.specs.BrakeNotches - 1;
             }

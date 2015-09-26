@@ -41,6 +41,7 @@ namespace Plugin
 
             devices.Add(new Interlock(this));
             devices.Add(new ModeSelector(this));
+            devices.Add(new Mode_RM(this));
         }
 
         internal void Elapse(ElapseData data)
@@ -149,6 +150,7 @@ namespace Plugin
                     trainModeSelected = TrainModes.CodedManual;
                     break;
             }
+            trainModeActual = trainModeSelected;
         }
 
         internal void SetReverser(int reverser)
