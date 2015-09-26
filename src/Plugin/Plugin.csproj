@@ -59,7 +59,7 @@
     <DefineConstants>TRACE</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
-    <OutputPath>..\..\</OutputPath>
+    <OutputPath>..\..\..\alstom-metropolis-for-openbve\sgatc-plugin\</OutputPath>
   </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.Targets" />
   <ItemGroup>
@@ -70,6 +70,10 @@
     <Reference Include="System" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Device.cs" />
+    <Compile Include="ModeSelector.cs" />
+    <Compile Include="Interlock.cs" />
+    <Compile Include="Train.cs" />
     <Compile Include="DriveAssist.cs" />
     <Compile Include="ATP.cs" />
     <Compile Include="Plugin.cs" />
