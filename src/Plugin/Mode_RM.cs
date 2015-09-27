@@ -7,7 +7,7 @@ namespace Plugin
     {
         const float RM_MAX_SPEED_KMH = 18.0f;
         const float RM_MOTOR_CUTOUT_KMH = 16.0f;
-        const float RM_LIMITER_RESET_KMH = 16.0f;
+        const float RM_LIMITER_RESET_KMH = 15.5f;
 
         private Train train;
         private bool isForcedCoasting = false; //If the train is actively being cut-off by motor cutout speed.

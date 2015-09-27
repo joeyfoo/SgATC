@@ -42,6 +42,7 @@ namespace Plugin
             devices.Add(new Interlock(this));
             devices.Add(new ModeSelector(this));
             devices.Add(new Mode_RM(this));
+            devices.Add(new Mode_ATO(this));
         }
 
         internal void Elapse(ElapseData data)
@@ -125,15 +126,15 @@ namespace Plugin
             panel[1] = (int)trainModeSelected;
 
             //Print debug message
-            data.DebugMessage = "Selected mode: " + panel[1] + " " + trainModeSelected;
-            data.DebugMessage += "\nDoors: " + doorState;
-            data.DebugMessage += "\nDemands: ";
-            foreach(int x in demands)
-            {
-                data.DebugMessage += x + ", ";
-            }
-
-            data.DebugMessage= data.DebugMessage.Replace("\n",Environment.NewLine);
+            //data.DebugMessage = "Selected mode: " + panel[1] + " " + trainModeSelected;
+            //data.DebugMessage += "\nDoors: " + doorState;
+            //data.DebugMessage += "\nDemands: ";
+            //foreach(int x in demands)
+            //{
+            //    data.DebugMessage += x + ", ";
+            //}
+            //
+            //data.DebugMessage= data.DebugMessage.Replace("\n",Environment.NewLine);
         }
 
         internal void Initialize(InitializationModes mode)
@@ -151,28 +152,42 @@ namespace Plugin
                     break;
             }
             trainModeActual = trainModeSelected;
+            
+            foreach(Device device in devices)
+            {
+                device.Initialize(mode);
+            }
         }
 
         internal void SetReverser(int reverser)
         {
             // Reverser state is ignored in game. 
             //TODO: Implement Adviser
-        }
 
-        internal void SetTrainMode(TrainModes previous, TrainModes current)
-        {
-            // Handle changing of train mode.
-
+            foreach (Device device in devices)
+            {
+                device.SetReverser(reverser);
+            }
         }
 
         internal void SetPower(int powerNotch)
         {
 
+
+            foreach (Device device in devices)
+            {
+                device.SetPower(powerNotch);
+            }
         }
 
         internal void SetBrake(int brakeNotch)
         {
 
+
+            foreach (Device device in devices)
+            {
+                device.SetBrake(brakeNotch);
+            }
         }
 
         internal void KeyDown(VirtualKeys key)
@@ -192,31 +207,56 @@ namespace Plugin
                 }
             }
 
+
+            foreach (Device device in devices)
+            {
+                device.KeyDown(key);
+            }
         }
 
         internal void KeyUp(VirtualKeys key)
         {
 
+
+            foreach (Device device in devices)
+            {
+                device.KeyUp(key);
+            }
         }
 
         internal void HornBlow(HornTypes type)
         {
 
+
+            foreach (Device device in devices)
+            {
+                device.HornBlow(type);
+            }
         }
 
         internal void DoorChange(DoorStates oldState, DoorStates newState)
         {
-
+            
         }
 
         internal void SetSignal(SignalData[] signal)
         {
 
+
+            foreach (Device device in devices)
+            {
+                device.SetSignal(signal);
+            }
         }
 
         internal void SetBeacon(BeaconData beacons)
         {
 
+
+            foreach (Device device in devices)
+            {
+                device.SetBeacon(beacons);
+            }
         }
 
     }

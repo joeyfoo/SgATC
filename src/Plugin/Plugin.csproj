@@ -73,6 +73,7 @@
     <Compile Include="Device.cs" />
     <Compile Include="ModeSelector.cs" />
     <Compile Include="Interlock.cs" />
+    <Compile Include="Mode_ATO.cs" />
     <Compile Include="Mode_RM.cs" />
     <Compile Include="Train.cs" />
     <Compile Include="DriveAssist.cs" />
