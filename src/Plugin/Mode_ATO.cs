@@ -5,12 +5,12 @@ namespace Plugin
 {
     internal class Mode_ATO : Device
     {
-        const float ACCELERATION_POLL_RATE = 0.5f; //sec
-        const float ATO_TARGET_DECELERATION_RATE = 0.75f; //m/s
-        const float ATO_TIME_BETWEEN_HANDLE_CHANGE = 0.25f;
+        const float ACCELERATION_POLL_RATE = 0.125f; //sec
+        const float ATO_TARGET_DECELERATION_RATE = -0.7f; //m/s
+        const float ATO_TIME_BETWEEN_NOTCH_CHANGE = 0.35f;
         const float ATO_LEVELLING_SPEED = 3.5f; //m/s
         //const float ATO_LEVELLING_DECELERATION_RATE = 0.3f;
-        const float ATO_LEVELLING_DISTANCE = 5.0f;
+        const float ATO_LEVELLING_DISTANCE = 8.0f;
         
         private enum AtoStates
         {
@@ -24,13 +24,12 @@ namespace Plugin
         private double accelerationRate = 0.0;
         private double accelerationLastSpeed = 0.0;
         private Time accelerationLastPoll = new Time(0.0);
+        private double notchLastChange = 0;
         private AtoStates atoState = AtoStates.NoStopInformation;
 
         private double? atoStoppingPosition = null;
         private int? atoReceivedData = null;
-        private int? atoDemands = null;
-
-        private string temp = "";
+        internal int? atoDemands = null;
 
         public Mode_ATO(Train train)
         {
@@ -39,109 +38,127 @@ namespace Plugin
 
         internal override int? Elapse(ElapseData data)
         {
+
+            //Calculate current acceleration rate
+
             if (data.TotalTime.Seconds - accelerationLastPoll.Seconds >= ACCELERATION_POLL_RATE)
             {
-                //temp = atoStoppingPosition + " " + (data.TotalTime.Seconds - accelerationLastPoll.Seconds);
-                accelerationRate = (data.Vehicle.Speed.MetersPerSecond - accelerationLastSpeed) / 
-                    (data.TotalTime.Seconds - accelerationLastPoll.Seconds);
-                accelerationLastPoll = data.TotalTime;
-                accelerationLastSpeed = data.Vehicle.Speed.MetersPerSecond;
-
-                //TEMP
-                if (atoState == AtoStates.NoStopInformation)
+                UpdateAcceleration(data);
+            }
+            
+            if (atoState == AtoStates.NoStopInformation)
+            {
+                if(atoStoppingPosition != null)
                 {
-                    if(atoStoppingPosition != null)
-                    {
-                        atoState = AtoStates.Ready;
-                    }
+                    atoState = AtoStates.Ready;
                 }
-                else if(atoState == AtoStates.Ready)
-                {
-                    double speed = data.Vehicle.Speed.MetersPerSecond;
-                    double brakingStart = atoStoppingPosition.Value - ATO_LEVELLING_DISTANCE - ((speed * speed) / (2 * ATO_TARGET_DECELERATION_RATE));
+            }
+            else if(atoState == AtoStates.Ready)
+            {
+                double speed = data.Vehicle.Speed.MetersPerSecond;
+                double brakingStart = atoStoppingPosition.Value - ATO_LEVELLING_DISTANCE - 
+                    CalculateDistanceToStop(ATO_TARGET_DECELERATION_RATE, speed);
 
-                    if (data.Vehicle.Location > brakingStart)
-                    {
-                        atoState = AtoStates.Stopping;
-                        atoDemands = 0;
-                    }
+                if (data.Vehicle.Location > brakingStart)
+                {
+                    atoState = AtoStates.Stopping;
+                    atoDemands = 0;
                 }
-                else if (atoState == AtoStates.Stopping)
+            }
+            else if (atoState == AtoStates.Stopping || atoState == AtoStates.Levelling)
+            {
+                double distanceToStop = atoStoppingPosition.Value - data.Vehicle.Location;
+                double tolerence = 0.0f; //(0.05 * distanceToStop);
+
+                double levelingDistance = 0.0;
+                if(atoState == AtoStates.Stopping)
                 {
-                    double distanceToStop = atoStoppingPosition.Value - data.Vehicle.Location;
-                    double tolerence = (0.05 * distanceToStop);
-                    double estimatedStoppingPosition = data.Vehicle.Location + ATO_LEVELLING_DISTANCE 
-                        + CalculateDistanceToStop(accelerationRate, data.Vehicle.Speed.MetersPerSecond);
-                    int currentDemand = data.Handles.PowerNotch - data.Handles.BrakeNotch;
-
-                    temp = atoState.ToString() + " predictive/stop/current: " + estimatedStoppingPosition + " " + atoStoppingPosition + " " + data.Vehicle.Location;
-
-                    if (estimatedStoppingPosition < atoStoppingPosition - tolerence)
-                    {
-                        atoDemands = atoDemands + 1;
-                    }
-                    else if (estimatedStoppingPosition > atoStoppingPosition)
-                    {
-                        atoDemands = atoDemands - 1;
-                    }
-
-                    if (data.Vehicle.Speed.MetersPerSecond <= ATO_LEVELLING_SPEED)
-                    {
-                        atoState = AtoStates.Levelling;
-                    }
+                    levelingDistance = ATO_LEVELLING_DISTANCE;
                 }
-                else if (atoState == AtoStates.Levelling)
+
+                int notchChange = CalculateStationStop(data, tolerence, atoStoppingPosition.Value - levelingDistance);
+                ChangeAtoDemands(data, (atoDemands.Value + notchChange), ATO_TIME_BETWEEN_NOTCH_CHANGE);
+
+                if (data.Vehicle.Speed.MetersPerSecond <= ATO_LEVELLING_SPEED)
                 {
-                    double distanceToStop = atoStoppingPosition.Value - data.Vehicle.Location;
-                    double estimatedStoppingPosition = data.Vehicle.Location + CalculateDistanceToStop(
-                        accelerationRate, data.Vehicle.Speed.MetersPerSecond);
-                    int currentDemand = data.Handles.PowerNotch - data.Handles.BrakeNotch;
-
-                    temp = atoState.ToString() + " predictive/stop/current: " + estimatedStoppingPosition + " " + atoStoppingPosition + " " + data.Vehicle.Location;
-
-                    if (estimatedStoppingPosition < atoStoppingPosition - 0.1)
-                    {
-                        atoDemands = atoDemands + 1;
-                    }
-                    else if (estimatedStoppingPosition > atoStoppingPosition + 0)
-                    {
-                        atoDemands = atoDemands - 1;
-                    }
-
-                    if (data.Vehicle.Speed.MetersPerSecond <= 0.1)
+                    atoState = AtoStates.Levelling;
+                    if (data.Vehicle.Speed.MetersPerSecond <= 0.05)
                     {
                         atoState = AtoStates.Stopped;
                         atoStoppingPosition = null;
                         atoDemands = null;
                     }
                 }
-                else if (atoState == AtoStates.Stopped)
+            }
+            else if (atoState == AtoStates.Stopped)
+            {
+                atoDemands = -train.specs.BrakeNotches;
+
+                if (data.Vehicle.Speed.MetersPerSecond <= 0.05 && data.Handles.BrakeNotch >= train.specs.BrakeNotches)
                 {
-                    if (data.Vehicle.Speed.MetersPerSecond >= 0.1)
-                    {
-                        atoState = AtoStates.NoStopInformation;
-                    }
+                    atoState = AtoStates.NoStopInformation;
+                    atoDemands = null;
                 }
             }
-            
-            //temp += atoState.ToString() + " " + atoDemands;
 
             if (atoReceivedData != null)
             {
                 atoStoppingPosition = atoReceivedData + data.Vehicle.Location;
-                temp = atoReceivedData.ToString();
                 atoReceivedData = null;
             }
-
-            data.DebugMessage = temp;
+            
             return atoDemands;
         }
 
+        internal int CalculateStationStop(ElapseData data, double tolerence, double targetStoppingPosition)
+        {
+            double projectedStoppingPosition = data.Vehicle.Location +
+                CalculateDistanceToStop(accelerationRate, data.Vehicle.Speed.MetersPerSecond);
+
+            if (projectedStoppingPosition > targetStoppingPosition || accelerationRate > 0)
+            {
+                return -1;
+            }
+            else if (projectedStoppingPosition < (targetStoppingPosition - tolerence))
+            {
+                return 1;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+        internal bool ChangeAtoDemands(ElapseData data, int newNotch, double frequency)
+        {
+            double currentTime = data.TotalTime.Seconds;
+
+            if(currentTime - notchLastChange >= frequency)
+            {
+                atoDemands = newNotch;
+                notchLastChange = currentTime;
+                return true;
+            }
+            return false;
+
+        }
+        internal double UpdateAcceleration(ElapseData data)
+        {
+            double speedPrev = accelerationLastSpeed;
+            double speedNow = data.Vehicle.Speed.MetersPerSecond;
+            double time = (data.TotalTime.Seconds - accelerationLastPoll.Seconds);
+
+            accelerationRate = (speedNow - speedPrev) / time;
+
+            accelerationLastPoll = data.TotalTime;
+            accelerationLastSpeed = speedNow;
+
+            return accelerationRate;
+        }
         internal double CalculateDistanceToStop(double acceleration, double speed)
         {
-            if(acceleration >= 0)
+            if(acceleration == 0.0)
             {
-                acceleration = -0.1;
+                return 0.0;
             }
             return -(speed * speed) / (2 * acceleration);
         }

@@ -126,13 +126,13 @@ namespace Plugin
             panel[1] = (int)trainModeSelected;
 
             //Print debug message
-            //data.DebugMessage = "Selected mode: " + panel[1] + " " + trainModeSelected;
-            //data.DebugMessage += "\nDoors: " + doorState;
-            //data.DebugMessage += "\nDemands: ";
-            //foreach(int x in demands)
-            //{
-            //    data.DebugMessage += x + ", ";
-            //}
+            data.DebugMessage = "Selected mode: " + panel[1] + " " + trainModeSelected;
+            data.DebugMessage += "\nDoors: " + doorState;
+            data.DebugMessage += "\nDemands: ";
+            foreach(int x in demands)
+            {
+                data.DebugMessage += x + ", ";
+            }
             //
             //data.DebugMessage= data.DebugMessage.Replace("\n",Environment.NewLine);
         }
