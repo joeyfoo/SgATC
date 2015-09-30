@@ -10,7 +10,7 @@ namespace Plugin
         const float ATO_TIME_BETWEEN_NOTCH_CHANGE = 0.35f;
         const float ATO_LEVELLING_SPEED = 3.5f; //m/s
         //const float ATO_LEVELLING_DECELERATION_RATE = 0.3f;
-        const float ATO_LEVELLING_DISTANCE = 8.0f;
+        const float ATO_LEVELLING_DISTANCE = 6.0f;
         
         private enum AtoStates
         {
