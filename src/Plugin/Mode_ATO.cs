@@ -5,13 +5,15 @@ namespace Plugin
 {
     internal class Mode_ATO : Device
     {
-        const float ACCELERATION_POLL_RATE = 0.125f; //sec
+        const float ACCELERATION_POLL_RATE = 0.0f; //sec
         const float ATO_TARGET_DECELERATION_RATE = -0.7f; //m/s
         const float ATO_TIME_BETWEEN_NOTCH_CHANGE = 0.35f;
-        const float ATO_LEVELLING_SPEED = 3.5f; //m/s
-        //const float ATO_LEVELLING_DECELERATION_RATE = 0.3f;
-        const float ATO_LEVELLING_DISTANCE = 6.0f;
-        
+        const float ATO_FRICTION_BRAKING_CUT_IN = 3.0f; //m/s
+        const float ATO_LEVELLING_SPEED = 1.25f; //m/s
+        const float ATO_LEVELLING_DECELERATION_RATE = -0.30f;
+        const float ATO_LEVELLING_DISTANCE = 5.0f;
+        const float ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE = 0.10f;
+
         private enum AtoStates
         {
             NoStopInformation,
@@ -65,29 +67,53 @@ namespace Plugin
                     atoDemands = 0;
                 }
             }
-            else if (atoState == AtoStates.Stopping || atoState == AtoStates.Levelling)
+            else if (atoState == AtoStates.Stopping)
             {
                 double distanceToStop = atoStoppingPosition.Value - data.Vehicle.Location;
                 double tolerence = 0.0f; //(0.05 * distanceToStop);
 
-                double levelingDistance = 0.0;
-                if(atoState == AtoStates.Stopping)
+                if (data.Vehicle.Speed.MetersPerSecond > ATO_LEVELLING_SPEED)
                 {
-                    levelingDistance = ATO_LEVELLING_DISTANCE;
+                    double stoppingPositionOffset = ATO_LEVELLING_DISTANCE * 1.5;
+                    if (data.Vehicle.Speed.MetersPerSecond < ATO_FRICTION_BRAKING_CUT_IN)
+                    {
+                        stoppingPositionOffset = ATO_LEVELLING_DISTANCE;
+                    }
+
+                    //Deceleration
+                    int notchChange = CalculateStationStop(data, tolerence, atoStoppingPosition.Value - stoppingPositionOffset);
+                    ChangeAtoDemands(data, (atoDemands.Value + notchChange), ATO_TIME_BETWEEN_NOTCH_CHANGE);
                 }
-
-                int notchChange = CalculateStationStop(data, tolerence, atoStoppingPosition.Value - levelingDistance);
-                ChangeAtoDemands(data, (atoDemands.Value + notchChange), ATO_TIME_BETWEEN_NOTCH_CHANGE);
-
-                if (data.Vehicle.Speed.MetersPerSecond <= ATO_LEVELLING_SPEED)
+                else
                 {
                     atoState = AtoStates.Levelling;
-                    if (data.Vehicle.Speed.MetersPerSecond <= 0.05)
+                }
+            }
+            else if (atoState == AtoStates.Levelling)
+            {
+                double distanceToStop = atoStoppingPosition.Value - data.Vehicle.Location;
+
+                double stoppingStart = atoStoppingPosition.Value - CalculateDistanceToStop(
+                    ATO_LEVELLING_DECELERATION_RATE, data.Vehicle.Speed.MetersPerSecond);
+
+                if (data.Vehicle.Location < stoppingStart)
+                {
+                    if (atoDemands < 0)
                     {
-                        atoState = AtoStates.Stopped;
-                        atoStoppingPosition = null;
-                        atoDemands = null;
+                        ChangeAtoDemands(data, (atoDemands.Value + 1), ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE);
                     }
+                }
+                else
+                {
+                    int notchChange = CalculateStationStop(data, 0.0, atoStoppingPosition.Value);
+                    ChangeAtoDemands(data, (atoDemands.Value + notchChange), ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE);
+                }
+
+                if (data.Vehicle.Speed.MetersPerSecond <= 0.05)
+                {
+                    atoState = AtoStates.Stopped;
+                    atoStoppingPosition = null;
+                    atoDemands = null;
                 }
             }
             else if (atoState == AtoStates.Stopped)
@@ -128,12 +154,13 @@ namespace Plugin
                 return 0;
             }
         }
-        internal bool ChangeAtoDemands(ElapseData data, int newNotch, double frequency)
+        internal bool ChangeAtoDemands(ElapseData data, int newNotch, double frequency, bool clampToServiceBraking=true)
         {
             double currentTime = data.TotalTime.Seconds;
 
             if(currentTime - notchLastChange >= frequency)
             {
+                if(newNotch <= train.specs.PowerNotches && newNotch >= -train.specs.BrakeNotches)
                 atoDemands = newNotch;
                 notchLastChange = currentTime;
                 return true;
