@@ -32,6 +32,13 @@ namespace Plugin
         internal TrainModes trainModeSelected = TrainModes.Off;
         internal TrainModes trainModeActual = TrainModes.Off;
         internal DoorStates doorState = DoorStates.None;
+        internal string debugMessage = "";
+
+        //Testing
+        internal double atpTrackSpeed = 80.0;
+        internal double atpTargetSpeed = 40.0;
+        internal double atpSafetySpeed = 50.0;
+        internal double test = 0;
 
         internal List<Device> devices = new List<Device>();
         
@@ -43,13 +50,21 @@ namespace Plugin
             devices.Add(new ModeSelector(this));
             devices.Add(new Mode_RM(this));
             devices.Add(new Mode_ATO(this));
+            devices.Add(new ATP(this));
         }
 
         internal void Elapse(ElapseData data)
         {
+            //debugMessage = "";
+
             //Run through devices
             List<int> demands = new List<int>();
-            demands.Add(data.Handles.PowerNotch - data.Handles.BrakeNotch);
+
+            //When in ATO, do not add
+            if (trainModeActual != TrainModes.Auto)
+            {
+                demands.Add(data.Handles.PowerNotch - data.Handles.BrakeNotch);
+            }
 
             foreach (Device device in devices)
             {
@@ -127,12 +142,13 @@ namespace Plugin
 
             //Print debug message
             data.DebugMessage = "Selected mode: " + panel[1] + " " + trainModeSelected;
-            data.DebugMessage += "\nDoors: " + doorState;
+            //data.DebugMessage += "\nDoors: " + doorState;
             data.DebugMessage += "\nDemands: ";
-            foreach(int x in demands)
+            foreach (int x in demands)
             {
                 data.DebugMessage += x + ", ";
             }
+            data.DebugMessage = debugMessage;
             //
             //data.DebugMessage= data.DebugMessage.Replace("\n",Environment.NewLine);
         }

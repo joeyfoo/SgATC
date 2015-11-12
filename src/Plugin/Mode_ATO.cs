@@ -13,21 +13,26 @@ namespace Plugin
         const float ATO_LEVELLING_DECELERATION_RATE = -0.30f;
         const float ATO_LEVELLING_DISTANCE = 5.0f;
         const float ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE = 0.10f;
+        const float ATO_POWERING_AMOUNT = 1.5f;
+        const float ATO_BRAKING_AMOUNT = 0.5f;
+        const float ATO_READY_TIMER = 3.0f;
 
         private enum AtoStates
         {
-            NoStopInformation,
             Ready,
+            Enroute,
             Stopping,
             Levelling, 
+            Docked,
             Stopped
         }
+        private AtoStates atoState = AtoStates.Ready;
         private Train train;
         private double accelerationRate = 0.0;
         private double accelerationLastSpeed = 0.0;
         private Time accelerationLastPoll = new Time(0.0);
         private double notchLastChange = 0;
-        private AtoStates atoState = AtoStates.NoStopInformation;
+        private double readyTimer = 0.0;
 
         private double? atoStoppingPosition = null;
         private int? atoReceivedData = null;
@@ -40,6 +45,12 @@ namespace Plugin
 
         internal override int? Elapse(ElapseData data)
         {
+            train.debugMessage = "";
+            //Is train in Auto?
+            if (train.trainModeActual != Train.TrainModes.Auto)
+            {
+                return null;
+            }
 
             //Calculate current acceleration rate
 
@@ -47,24 +58,56 @@ namespace Plugin
             {
                 UpdateAcceleration(data);
             }
-            
-            if (atoState == AtoStates.NoStopInformation)
+
+            train.debugMessage = $"{atoState}";
+
+            if (atoState == AtoStates.Ready)
             {
-                if(atoStoppingPosition != null)
+                atoDemands = -train.specs.BrakeNotches;
+
+                readyTimer -= data.ElapsedTime.Seconds;
+                if (train.doorState != DoorStates.None)
                 {
-                    atoState = AtoStates.Ready;
+                    atoState = AtoStates.Stopped;
+                }
+                else if(readyTimer <= 0.0)
+                {
+                    atoState = AtoStates.Enroute;
                 }
             }
-            else if(atoState == AtoStates.Ready)
+            else if (atoState == AtoStates.Enroute)
             {
-                double speed = data.Vehicle.Speed.MetersPerSecond;
-                double brakingStart = atoStoppingPosition.Value - ATO_LEVELLING_DISTANCE - 
-                    CalculateDistanceToStop(ATO_TARGET_DECELERATION_RATE, speed);
+                double speedDifference = train.atpTargetSpeed - data.Vehicle.Speed.KilometersPerHour;
 
-                if (data.Vehicle.Location > brakingStart)
+                int notch = 0;
+
+                if (train.atpTargetSpeed <= 3.0 && data.Vehicle.Speed.KilometersPerHour <= 3.0)
                 {
-                    atoState = AtoStates.Stopping;
-                    atoDemands = 0;
+                    ChangeAtoDemands(data, -train.specs.B67Notch, ATO_TIME_BETWEEN_NOTCH_CHANGE);
+                }
+                else if (train.atpTargetSpeed < data.Vehicle.Speed.KilometersPerHour) //Braking
+                {
+                    notch = Math.Min(0, (int)(speedDifference / ATO_BRAKING_AMOUNT) - 1);
+                }
+                else //Powering
+                {
+                    notch = Math.Max(0, (int)(speedDifference / ATO_POWERING_AMOUNT));
+                }
+
+                ChangeAtoDemands(data, notch, ATO_TIME_BETWEEN_NOTCH_CHANGE);
+                train.debugMessage = $"Enroute. {atoDemands}. Target speed {train.atpTargetSpeed}";
+
+                if (atoStoppingPosition != null)
+                {
+                    double speed = data.Vehicle.Speed.MetersPerSecond;
+                    double brakingStart = atoStoppingPosition.Value - ATO_LEVELLING_DISTANCE -
+                        CalculateDistanceToStop(ATO_TARGET_DECELERATION_RATE, speed);
+
+                    if (data.Vehicle.Location > brakingStart)
+                    {
+                        atoState = AtoStates.Stopping;
+                        atoDemands = 0;
+                    }
                 }
             }
             else if (atoState == AtoStates.Stopping)
@@ -111,19 +154,28 @@ namespace Plugin
 
                 if (data.Vehicle.Speed.MetersPerSecond <= 0.05)
                 {
-                    atoState = AtoStates.Stopped;
+                    atoState = AtoStates.Docked;
                     atoStoppingPosition = null;
                     atoDemands = null;
+                }
+            }
+            else if (atoState == AtoStates.Docked)
+            {
+                atoDemands = -train.specs.BrakeNotches;
+
+                if (train.doorState != DoorStates.None)
+                {
+                    atoState = AtoStates.Stopped;
                 }
             }
             else if (atoState == AtoStates.Stopped)
             {
                 atoDemands = -train.specs.BrakeNotches;
 
-                if (data.Vehicle.Speed.MetersPerSecond <= 0.05 && data.Handles.BrakeNotch >= train.specs.BrakeNotches)
+                if (train.doorState == DoorStates.None)
                 {
-                    atoState = AtoStates.NoStopInformation;
-                    atoDemands = null;
+                    atoState = AtoStates.Ready;
+                    readyTimer = ATO_READY_TIMER;
                 }
             }
 
@@ -132,7 +184,8 @@ namespace Plugin
                 atoStoppingPosition = atoReceivedData + data.Vehicle.Location;
                 atoReceivedData = null;
             }
-            
+
+            //train.debugMessage = $" Ato: {atoState} demanding {atoDemands} for {train.atpTargetSpeed}";
             return atoDemands;
         }
 
@@ -160,9 +213,15 @@ namespace Plugin
 
             if(currentTime - notchLastChange >= frequency)
             {
-                if(newNotch <= train.specs.PowerNotches && newNotch >= -train.specs.BrakeNotches)
-                atoDemands = newNotch;
+                int min = -train.specs.BrakeNotches;
+                if(clampToServiceBraking)
+                {
+                    min += 1;
+                }
+                int max = train.specs.PowerNotches;
+                atoDemands = Math.Max(min, Math.Min(max, newNotch));
                 notchLastChange = currentTime;
+                train.debugMessage += $" {newNotch}";
                 return true;
             }
             return false;
