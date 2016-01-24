@@ -6,7 +6,9 @@ namespace Plugin
     internal class ModeSelector : Device
     {
         private Train train;
-        private Train.TrainModes trainModePending = Train.TrainModes.Off;
+        private Train.TrainModes? trainModeNew = null;
+        const float CHANGE_MODE_TIMER = 2.0f;
+        private float changeModeTimer = 0;
 
         public ModeSelector(Train train)
         {
@@ -15,24 +17,38 @@ namespace Plugin
 
         internal override int? Elapse(ElapseData data)
         {
-            if (train.trainModeSelected != train.trainModeActual)
+            if (trainModeNew != null)
             {
-                trainModePending = train.trainModeSelected;
-            }
-            else
-            {
-                return null;
+                train.trainModeSelected = (Train.TrainModes)trainModeNew;
+                changeModeTimer = CHANGE_MODE_TIMER;
+                trainModeNew = null;
             }
 
-            if (data.Vehicle.Speed.KilometersPerHour > 0.5 || data.Handles.BrakeNotch < train.specs.BrakeNotches)
+            if (train.trainModeActual != train.trainModeSelected)
             {
-                return -train.specs.BrakeNotches - 1;
+                if (IsModeChangable(data))
+                {
+                    if (changeModeTimer > 0)
+                    {
+                        changeModeTimer -= (float)data.ElapsedTime.Seconds;
+                    }
+                    else
+                    {
+                        changeModeTimer = 0.0f;
+                        train.trainModeActual = train.trainModeSelected;
+                    }
+                }
+                else
+                {
+                    return -train.specs.BrakeNotches;
+                }
             }
-            else
-            {
-                train.trainModeActual = trainModePending;
-                return null;
-            }
+            return null;
+        }
+
+        private Boolean IsModeChangable(ElapseData data)
+        {
+            return data.Vehicle.Speed.KilometersPerHour < 0.01 && data.Handles.BrakeNotch >= train.specs.B67Notch;
         }
 
         internal override void HornBlow(HornTypes type)
@@ -47,7 +63,22 @@ namespace Plugin
 
         internal override void KeyDown(VirtualKeys key)
         {
-            
+            if (key == VirtualKeys.C1) //Mode Up
+            {
+                if ((int)train.trainModeSelected < train.trainModeCount - 1)
+                {
+                    trainModeNew = train.trainModeSelected + 1;
+                }
+            }
+            else if (key == VirtualKeys.C2) //Mode Down
+            {
+                if ((int)train.trainModeSelected > 0)
+                {
+                    trainModeNew = train.trainModeSelected - 1;
+                }
+            }
+
+
         }
 
         internal override void KeyUp(VirtualKeys key)

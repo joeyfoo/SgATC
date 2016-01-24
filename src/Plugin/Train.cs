@@ -23,7 +23,7 @@ namespace Plugin
             RestrictedManualReverse = 3,
             RestrictedManualForward = 4
         }
-        int trainModeCount = Enum.GetNames(typeof(TrainModes)).Length;
+        internal int trainModeCount = Enum.GetNames(typeof(TrainModes)).Length;
 
         internal int[] panel;
         //Sounds
@@ -33,24 +33,23 @@ namespace Plugin
         internal TrainModes trainModeActual = TrainModes.Off;
         internal DoorStates doorState = DoorStates.None;
         internal string debugMessage = "";
+        
+        internal double atpTrackTargetSpeed = 00.0; //ATP Target Speed
+        internal double atpTargetSpeed = 00.0; //ATP Target Speed taking into account next train
+        internal double atpTrackSafetySpeed = 00.0; //ATP Safety Speed
+        internal double atpSafetySpeed = 00.0; //ATP Safety Speed taking into account next train
 
-        //Testing
-        internal double atpTrackSpeed = 80.0;
-        internal double atpTargetSpeed = 40.0;
-        internal double atpSafetySpeed = 50.0;
-        internal double test = 0;
-
-        internal List<Device> devices = new List<Device>();
+        internal Dictionary<string, Device> devices = new Dictionary<string, Device>();
         
         internal Train(int[] panel, PlaySoundDelegate playSound)
         {
             this.panel = panel;
 
-            devices.Add(new Interlock(this));
-            devices.Add(new ModeSelector(this));
-            devices.Add(new Mode_RM(this));
-            devices.Add(new Mode_ATO(this));
-            devices.Add(new ATP(this));
+            devices.Add("internlock", new Interlock(this));
+            devices.Add("modeselector", new ModeSelector(this));
+            //devices.Add("rm", new Mode_RM(this));
+            //devices.Add("ato", new Mode_ATO(this));
+            devices.Add("atp", new ATP(this));
         }
 
         internal void Elapse(ElapseData data)
@@ -66,7 +65,7 @@ namespace Plugin
                 demands.Add(data.Handles.PowerNotch - data.Handles.BrakeNotch);
             }
 
-            foreach (Device device in devices)
+            foreach (Device device in devices.Values)
             {
                 int? d = device.Elapse(data);
                 if(d != null)
@@ -169,7 +168,7 @@ namespace Plugin
             }
             trainModeActual = trainModeSelected;
             
-            foreach(Device device in devices)
+            foreach(Device device in devices.Values)
             {
                 device.Initialize(mode);
             }
@@ -180,7 +179,7 @@ namespace Plugin
             // Reverser state is ignored in game. 
             //TODO: Implement Adviser
 
-            foreach (Device device in devices)
+            foreach (Device device in devices.Values)
             {
                 device.SetReverser(reverser);
             }
@@ -190,7 +189,7 @@ namespace Plugin
         {
 
 
-            foreach (Device device in devices)
+            foreach (Device device in devices.Values)
             {
                 device.SetPower(powerNotch);
             }
@@ -200,7 +199,7 @@ namespace Plugin
         {
 
 
-            foreach (Device device in devices)
+            foreach (Device device in devices.Values)
             {
                 device.SetBrake(brakeNotch);
             }
@@ -208,23 +207,7 @@ namespace Plugin
 
         internal void KeyDown(VirtualKeys key)
         {
-            if (key == VirtualKeys.C1) //Mode Up
-            {
-                if ((int)trainModeSelected < trainModeCount - 1)
-                {
-                    trainModeSelected++;
-                }
-            }
-            else if (key == VirtualKeys.C2) //Mode Down
-            {
-                if ((int)trainModeSelected > 0)
-                {
-                    trainModeSelected--;
-                }
-            }
-
-
-            foreach (Device device in devices)
+            foreach (Device device in devices.Values)
             {
                 device.KeyDown(key);
             }
@@ -234,7 +217,7 @@ namespace Plugin
         {
 
 
-            foreach (Device device in devices)
+            foreach (Device device in devices.Values)
             {
                 device.KeyUp(key);
             }
@@ -244,7 +227,7 @@ namespace Plugin
         {
 
 
-            foreach (Device device in devices)
+            foreach (Device device in devices.Values)
             {
                 device.HornBlow(type);
             }
@@ -259,7 +242,7 @@ namespace Plugin
         {
 
 
-            foreach (Device device in devices)
+            foreach (Device device in devices.Values)
             {
                 device.SetSignal(signal);
             }
@@ -269,7 +252,7 @@ namespace Plugin
         {
 
 
-            foreach (Device device in devices)
+            foreach (Device device in devices.Values)
             {
                 device.SetBeacon(beacons);
             }

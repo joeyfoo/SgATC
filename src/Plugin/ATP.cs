@@ -5,9 +5,13 @@ namespace Plugin
 {
     internal class ATP : Device
     {
-        const float ATP_TARGET_DECELERATION_RATE = -0.65f; //m/s
-        const float ATP_SAFETY_DECELERATION_RATE = -0.80f; //m/s
+        const float ATP_SAFETY_DECELERATION_RATE = -0.70f; //m/s
+        const float ATP_SAFETY_STOPPING_DISTANCE = 40.0f; //Buffer distance to next train
 
+        const float ATP_TARGET_DECELERATION_RATE = -0.50f; //m/s
+        const float ATP_TARGET_STOPPING_DISTANCE = 75.0f;
+
+        const float ATP_RESTART_DISTANCE = 20.0f; //Distance for preceding train to move before moving off
 
         private Train train;
 
@@ -66,12 +70,12 @@ namespace Plugin
             {
                 atpTripTimer -= data.ElapsedTime.Seconds;
                 atpTripTimer = Math.Max(atpTripTimer ?? 0, 0);
-                if (data.Vehicle.Speed.KilometersPerHour <= train.atpSafetySpeed)
+                if (data.Vehicle.Speed.KilometersPerHour <= train.atpTrackSafetySpeed)
                 {
                     atpTripTimer = null;
                 }
             }
-            else if (data.Vehicle.Speed.KilometersPerHour > train.atpSafetySpeed)
+            else if (data.Vehicle.Speed.KilometersPerHour > train.atpTrackSafetySpeed)
             {
                 atpTripTimer = ATP_WARNING_DURATION;
             }
@@ -81,13 +85,21 @@ namespace Plugin
         {
             if(precedingVehicle == null)
             {
-                train.atpTargetSpeed = train.atpTrackSpeed;
+                train.atpTargetSpeed = train.atpTrackTargetSpeed;
+                train.atpSafetySpeed = train.atpTrackSafetySpeed;
             }
             else
             {
-                double distanceToStop = precedingVehicle.Distance - 50.0;
-                train.atpTargetSpeed = Math.Max(Math.Min(CalculateSpeedToStop(ATP_TARGET_DECELERATION_RATE, distanceToStop), train.atpTrackSpeed), 0.0);
+                double distanceToStop = precedingVehicle.Distance - ATP_TARGET_STOPPING_DISTANCE;
+                train.atpTargetSpeed = Math.Max(Math.Min(CalculateSpeedToStop(ATP_TARGET_DECELERATION_RATE, distanceToStop), train.atpTrackTargetSpeed), 0.0);
                 if(Double.IsNaN(train.atpTargetSpeed))
+                {
+                    throw new ApplicationException();
+                }
+
+
+                train.atpSafetySpeed = Math.Min(CalculateSpeedToStop(ATP_TARGET_DECELERATION_RATE, (precedingVehicle.Distance - ATP_SAFETY_STOPPING_DISTANCE)), train.atpTrackSafetySpeed);
+                if (Double.IsNaN(train.atpSafetySpeed))
                 {
                     throw new ApplicationException();
                 }
@@ -134,9 +146,10 @@ namespace Plugin
 
         internal override void SetBeacon(BeaconData beacon)
         {
-            if (beacon.Type == 33)
+            if (beacon.Type == 31) //Target and safety track speeds
             {
-                //atoReceivedData = beacon.Optional;
+                train.atpTrackTargetSpeed = beacon.Optional / 1000;
+                train.atpTrackSafetySpeed = beacon.Optional % 1000;
             }
         }
 

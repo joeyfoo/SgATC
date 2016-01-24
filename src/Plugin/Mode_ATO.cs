@@ -13,9 +13,9 @@ namespace Plugin
         const float ATO_LEVELLING_DECELERATION_RATE = -0.30f;
         const float ATO_LEVELLING_DISTANCE = 5.0f;
         const float ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE = 0.10f;
-        const float ATO_POWERING_AMOUNT = 1.5f;
-        const float ATO_BRAKING_AMOUNT = 0.5f;
-        const float ATO_READY_TIMER = 3.0f;
+        const float ATO_POWERING_AMOUNT = 0.5f;
+        const float ATO_BRAKING_AMOUNT = 0.1f;
+        const float ATO_READY_TIMER = 1.0f;
 
         private enum AtoStates
         {
@@ -49,6 +49,7 @@ namespace Plugin
             //Is train in Auto?
             if (train.trainModeActual != Train.TrainModes.Auto)
             {
+                atoState = AtoStates.Docked;
                 return null;
             }
 
@@ -94,7 +95,7 @@ namespace Plugin
                     notch = Math.Max(0, (int)(speedDifference / ATO_POWERING_AMOUNT));
                 }
 
-                ChangeAtoDemands(data, notch, ATO_TIME_BETWEEN_NOTCH_CHANGE);
+                ChangeAtoDemands(data, notch, ATO_TIME_BETWEEN_NOTCH_CHANGE, true, true);
                 train.debugMessage = $"Enroute. {atoDemands}. Target speed {train.atpTargetSpeed}";
 
                 if (atoStoppingPosition != null)
@@ -207,19 +208,25 @@ namespace Plugin
                 return 0;
             }
         }
-        internal bool ChangeAtoDemands(ElapseData data, int newNotch, double frequency, bool clampToServiceBraking=true)
+        internal bool ChangeAtoDemands(ElapseData data, int newNotch, double frequency, bool clampToServiceBraking=true, bool clampToTargetDecelerationRate=false)
         {
             double currentTime = data.TotalTime.Seconds;
 
             if(currentTime - notchLastChange >= frequency)
             {
-                int min = -train.specs.BrakeNotches;
-                if(clampToServiceBraking)
+                int newDemand = Math.Max((int)atoDemands - 1, Math.Min((int)atoDemands + 1, newNotch));
+                if (clampToTargetDecelerationRate && accelerationRate < ATO_TARGET_DECELERATION_RATE)
                 {
-                    min += 1;
+                    newDemand++;
+                }
+
+                int min = -train.specs.BrakeNotches;
+                if(!clampToServiceBraking)
+                {
+                    min -= 1;
                 }
                 int max = train.specs.PowerNotches;
-                atoDemands = Math.Max(min, Math.Min(max, newNotch));
+                atoDemands = Math.Max(min, Math.Min(max, newDemand));
                 notchLastChange = currentTime;
                 train.debugMessage += $" {newNotch}";
                 return true;
@@ -270,9 +277,15 @@ namespace Plugin
 
         internal override void SetBeacon(BeaconData beacon)
         {
-            if(beacon.Type == 33)
+            if(beacon.Type == 33) //Distance to stop point
             {
                 atoReceivedData = beacon.Optional;
+            }
+
+            //Central Line ATP
+            if(beacon.Type == 6)
+            {
+                atoReceivedData = beacon.Optional % 1000;
             }
         }
 
