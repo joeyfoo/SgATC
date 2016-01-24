@@ -7,11 +7,14 @@ namespace Plugin
     {
         const float ACCELERATION_POLL_RATE = 0.0f; //sec
         const float ATO_TARGET_DECELERATION_RATE = -0.7f; //m/s
-        const float ATO_TIME_BETWEEN_NOTCH_CHANGE = 0.35f;
+        const float ATO_TIME_BETWEEN_NOTCH_CHANGE = 0.10f;
         const float ATO_FRICTION_BRAKING_CUT_IN = 3.0f; //m/s
+        const float ATO_BRAKING_TOLERANCE = 0.75f; //m
         const float ATO_LEVELLING_SPEED = 1.25f; //m/s
         const float ATO_LEVELLING_DECELERATION_RATE = -0.30f;
         const float ATO_LEVELLING_DISTANCE = 5.0f;
+        const float ATO_LEVELLING_TOLERANCE = 0.1f; //m
+        const float ATO_LEVELLING_CRAWL_SPEED = 0.5f; //m/s
         const float ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE = 0.10f;
         const float ATO_POWERING_AMOUNT = 0.5f;
         const float ATO_BRAKING_AMOUNT = 0.1f;
@@ -21,9 +24,6 @@ namespace Plugin
         {
             Ready,
             Enroute,
-            Stopping,
-            Levelling, 
-            Docked,
             Stopped
         }
         private AtoStates atoState = AtoStates.Ready;
@@ -49,21 +49,28 @@ namespace Plugin
             //Is train in Auto?
             if (train.trainModeActual != Train.TrainModes.Auto)
             {
-                atoState = AtoStates.Docked;
+                atoState = AtoStates.Stopped;
                 return null;
             }
 
             //Calculate current acceleration rate
-
             if (data.TotalTime.Seconds - accelerationLastPoll.Seconds >= ACCELERATION_POLL_RATE)
             {
                 UpdateAcceleration(data);
+            }
+
+            //Calculate distance to stop
+            double? distanceToNextStop = null;
+            if (atoStoppingPosition != null)
+            {
+                distanceToNextStop = atoStoppingPosition - data.Vehicle.Location;
             }
 
             train.debugMessage = $"{atoState}";
 
             if (atoState == AtoStates.Ready)
             {
+                //At station counting down to departure
                 atoDemands = -train.specs.BrakeNotches;
 
                 readyTimer -= data.ElapsedTime.Seconds;
@@ -71,99 +78,35 @@ namespace Plugin
                 {
                     atoState = AtoStates.Stopped;
                 }
-                else if(readyTimer <= 0.0)
+                else if (readyTimer <= 0.0)
                 {
                     atoState = AtoStates.Enroute;
                 }
             }
             else if (atoState == AtoStates.Enroute)
             {
-                double speedDifference = train.atpTargetSpeed - data.Vehicle.Speed.KilometersPerHour;
+                //Travelling to next station
 
-                int notch = 0;
+                //Get the train to stick to the ATP Target Speed
+                int atoTargetSpeedDemand = CalculateTargetSpeedNotchChange(data);
 
-                if (train.atpTargetSpeed <= 3.0 && data.Vehicle.Speed.KilometersPerHour <= 3.0)
-                {
-                    ChangeAtoDemands(data, -train.specs.B67Notch, ATO_TIME_BETWEEN_NOTCH_CHANGE);
-                }
-                else if (train.atpTargetSpeed < data.Vehicle.Speed.KilometersPerHour) //Braking
-                {
-                    notch = Math.Min(0, (int)(speedDifference / ATO_BRAKING_AMOUNT) - 1);
-                }
-                else //Powering
-                {
-                    notch = Math.Max(0, (int)(speedDifference / ATO_POWERING_AMOUNT));
-                }
-
-                ChangeAtoDemands(data, notch, ATO_TIME_BETWEEN_NOTCH_CHANGE, true, true);
-                train.debugMessage = $"Enroute. {atoDemands}. Target speed {train.atpTargetSpeed}";
-
+                //Run function for stopping at station
+                int? atoStoppingDemand = null;
                 if (atoStoppingPosition != null)
                 {
-                    double speed = data.Vehicle.Speed.MetersPerSecond;
-                    double brakingStart = atoStoppingPosition.Value - ATO_LEVELLING_DISTANCE -
-                        CalculateDistanceToStop(ATO_TARGET_DECELERATION_RATE, speed);
-
-                    if (data.Vehicle.Location > brakingStart)
-                    {
-                        atoState = AtoStates.Stopping;
-                        atoDemands = 0;
-                    }
-                }
-            }
-            else if (atoState == AtoStates.Stopping)
-            {
-                double distanceToStop = atoStoppingPosition.Value - data.Vehicle.Location;
-                double tolerence = 0.0f; //(0.05 * distanceToStop);
-
-                if (data.Vehicle.Speed.MetersPerSecond > ATO_LEVELLING_SPEED)
-                {
-                    double stoppingPositionOffset = ATO_LEVELLING_DISTANCE * 1.5;
-                    if (data.Vehicle.Speed.MetersPerSecond < ATO_FRICTION_BRAKING_CUT_IN)
-                    {
-                        stoppingPositionOffset = ATO_LEVELLING_DISTANCE;
-                    }
-
-                    //Deceleration
-                    int notchChange = CalculateStationStop(data, tolerence, atoStoppingPosition.Value - stoppingPositionOffset);
-                    ChangeAtoDemands(data, (atoDemands.Value + notchChange), ATO_TIME_BETWEEN_NOTCH_CHANGE);
-                }
-                else
-                {
-                    atoState = AtoStates.Levelling;
-                }
-            }
-            else if (atoState == AtoStates.Levelling)
-            {
-                double distanceToStop = atoStoppingPosition.Value - data.Vehicle.Location;
-
-                double stoppingStart = atoStoppingPosition.Value - CalculateDistanceToStop(
-                    ATO_LEVELLING_DECELERATION_RATE, data.Vehicle.Speed.MetersPerSecond);
-
-                if (data.Vehicle.Location < stoppingStart)
-                {
-                    if (atoDemands < 0)
-                    {
-                        ChangeAtoDemands(data, (atoDemands.Value + 1), ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE);
-                    }
-                }
-                else
-                {
-                    int notchChange = CalculateStationStop(data, 0.0, atoStoppingPosition.Value);
-                    ChangeAtoDemands(data, (atoDemands.Value + notchChange), ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE);
+                    //Call a function that returns the desired brake/power notch (or null if none)
+                    atoStoppingDemand = CalculateStationStopNotchChange(data, distanceToNextStop ?? 0);
                 }
 
-                if (data.Vehicle.Speed.MetersPerSecond <= 0.05)
-                {
-                    atoState = AtoStates.Docked;
-                    atoStoppingPosition = null;
-                    atoDemands = null;
-                }
-            }
-            else if (atoState == AtoStates.Docked)
-            {
-                atoDemands = -train.specs.BrakeNotches;
+                //Select the lowest notch between "TASC" and the target speed code above
+                int notch = (atoDemands ?? 0) + Math.Min(atoStoppingDemand ?? train.specs.PowerNotches, atoTargetSpeedDemand);
 
+                //Call ChangeAtoDemands with appropriate time between notch 
+                ChangeAtoDemands(data, notch, ATO_TIME_BETWEEN_NOTCH_CHANGE, true, true);
+
+                train.debugMessage = $"Enroute. TS {atoTargetSpeedDemand}, TASC {atoStoppingDemand}. Req {notch}. Actual {atoDemands}. Target speed {train.atpTargetSpeed}";
+
+                //If doors open
                 if (train.doorState != DoorStates.None)
                 {
                     atoState = AtoStates.Stopped;
@@ -171,6 +114,7 @@ namespace Plugin
             }
             else if (atoState == AtoStates.Stopped)
             {
+                atoStoppingPosition = null;
                 atoDemands = -train.specs.BrakeNotches;
 
                 if (train.doorState == DoorStates.None)
@@ -190,7 +134,90 @@ namespace Plugin
             return atoDemands;
         }
 
-        internal int CalculateStationStop(ElapseData data, double tolerence, double targetStoppingPosition)
+        internal int CalculateTargetSpeedNotchChange(ElapseData data)
+        {
+            double speedDifference = train.atpTargetSpeed - data.Vehicle.Speed.KilometersPerHour;
+            
+            if (train.atpTargetSpeed <= 3.0 && data.Vehicle.Speed.KilometersPerHour <= 3.0)
+            {
+                return -1;
+            }
+            else if (train.atpTargetSpeed < data.Vehicle.Speed.KilometersPerHour)
+            {
+                int notch = Math.Min(0, (int)(speedDifference / ATO_BRAKING_AMOUNT) - 1); 
+                return notch - atoDemands??0;
+            }
+            else
+            {
+                int notch = Math.Max(0, (int)(speedDifference / ATO_POWERING_AMOUNT));
+                return notch - atoDemands??0;
+            }
+        }
+
+        internal int CalculateStationStopNotchChange(ElapseData data, double distanceToNextStop)
+        {
+            //Returns notch adjustment 
+            double speed = data.Vehicle.Speed.MetersPerSecond;
+
+            if (speed > ATO_LEVELLING_SPEED)
+            {
+                double stoppingDistance = CalculateDecelerationDistance(data.Vehicle.Speed.MetersPerSecond, ATO_TARGET_DECELERATION_RATE) ?? 0;
+
+                if (stoppingDistance < distanceToNextStop - ATO_LEVELLING_DISTANCE - ATO_BRAKING_TOLERANCE)
+                {
+                    return 1;
+                }
+                else if (stoppingDistance > distanceToNextStop - ATO_LEVELLING_DISTANCE + ATO_BRAKING_TOLERANCE)
+                {
+                    return -1;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+            else
+            {
+                double stoppingDistance = CalculateDecelerationDistance(data.Vehicle.Speed.MetersPerSecond, ATO_LEVELLING_DECELERATION_RATE) ?? 0;
+
+                if (stoppingDistance < distanceToNextStop - ATO_LEVELLING_TOLERANCE)
+                {
+                    if(data.Vehicle.Speed.MetersPerSecond > ATO_LEVELLING_CRAWL_SPEED && atoDemands >= 0)
+                    {
+                        return 0;
+                    }
+                    else
+                    {
+                        return 1;
+                    }
+                }
+                else if (stoppingDistance > distanceToNextStop + ATO_LEVELLING_TOLERANCE)
+                {
+                    return -1;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+
+
+        }
+
+        internal double? CalculateDecelerationDistance(double initialSpeed, double acceleration, double targetSpeed = 0)
+        {
+            if (acceleration >= 0.0)
+            {
+                return null;
+            }
+            else
+            {
+                double distance = ((targetSpeed * targetSpeed) - (initialSpeed * initialSpeed)) / (acceleration * 2);
+                return distance;
+            }
+        }
+
+        /*internal int CalculateStationStop(ElapseData data, double tolerence, double targetStoppingPosition)
         {
             double projectedStoppingPosition = data.Vehicle.Location +
                 CalculateDistanceToStop(accelerationRate, data.Vehicle.Speed.MetersPerSecond);
@@ -207,12 +234,13 @@ namespace Plugin
             {
                 return 0;
             }
-        }
-        internal bool ChangeAtoDemands(ElapseData data, int newNotch, double frequency, bool clampToServiceBraking=true, bool clampToTargetDecelerationRate=false)
+        }*/
+
+        internal bool ChangeAtoDemands(ElapseData data, int newNotch, double frequency, bool clampToServiceBraking = true, bool clampToTargetDecelerationRate = false)
         {
             double currentTime = data.TotalTime.Seconds;
 
-            if(currentTime - notchLastChange >= frequency)
+            if (currentTime - notchLastChange >= frequency)
             {
                 int newDemand = Math.Max((int)atoDemands - 1, Math.Min((int)atoDemands + 1, newNotch));
                 if (clampToTargetDecelerationRate && accelerationRate < ATO_TARGET_DECELERATION_RATE)
@@ -221,7 +249,7 @@ namespace Plugin
                 }
 
                 int min = -train.specs.BrakeNotches;
-                if(!clampToServiceBraking)
+                if (!clampToServiceBraking)
                 {
                     min -= 1;
                 }
@@ -247,14 +275,6 @@ namespace Plugin
 
             return accelerationRate;
         }
-        internal double CalculateDistanceToStop(double acceleration, double speed)
-        {
-            if(acceleration == 0.0)
-            {
-                return 0.0;
-            }
-            return -(speed * speed) / (2 * acceleration);
-        }
 
         internal override void Initialize(InitializationModes mode)
         {
@@ -277,13 +297,13 @@ namespace Plugin
 
         internal override void SetBeacon(BeaconData beacon)
         {
-            if(beacon.Type == 33) //Distance to stop point
+            if (beacon.Type == 33) //Distance to stop point
             {
                 atoReceivedData = beacon.Optional;
             }
 
             //Central Line ATP
-            if(beacon.Type == 6)
+            if (beacon.Type == 6)
             {
                 atoReceivedData = beacon.Optional % 1000;
             }
