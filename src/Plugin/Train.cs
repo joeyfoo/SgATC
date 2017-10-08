@@ -35,9 +35,14 @@ namespace Plugin
         internal string debugMessage = "";
         
         internal double atpTrackTargetSpeed = 00.0; //ATP Target Speed
+        internal double atpTrackNextTargetSpeed = 00.0; //upcoming target Speed
         internal double atpTargetSpeed = 00.0; //ATP Target Speed taking into account next train
         internal double atpTrackSafetySpeed = 00.0; //ATP Safety Speed
+        internal double atpTrackNextSafetySpeed = 00.0; //upcoming safety Speed
         internal double atpSafetySpeed = 00.0; //ATP Safety Speed taking into account next train
+        internal double atpTrackNextSpeedPosition = -1; //distance to upcoming
+
+        internal double temp1 = 0;
 
         internal Dictionary<string, Device> devices = new Dictionary<string, Device>();
         
@@ -138,6 +143,8 @@ namespace Plugin
                 panel[i] = 0;
             }
             panel[1] = (int)trainModeSelected;
+            panel[2] = (int)atpSafetySpeed;
+            panel[3] = (int)atpTargetSpeed;
 
             //Print debug message
             data.DebugMessage = "Selected mode: " + panel[1] + " " + trainModeSelected;
@@ -148,6 +155,7 @@ namespace Plugin
                 data.DebugMessage += x + ", ";
             }
             data.DebugMessage = debugMessage;
+            data.DebugMessage = $"Safety/target speeds are {atpTrackSafetySpeed}/{atpTrackTargetSpeed}"; 
             //
             //data.DebugMessage= data.DebugMessage.Replace("\n",Environment.NewLine);
         }
