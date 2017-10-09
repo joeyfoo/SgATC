@@ -223,8 +223,6 @@ namespace Plugin
 
         internal void KeyUp(VirtualKeys key)
         {
-
-
             foreach (Device device in devices.Values)
             {
                 device.KeyUp(key);
@@ -233,8 +231,6 @@ namespace Plugin
 
         internal void HornBlow(HornTypes type)
         {
-
-
             foreach (Device device in devices.Values)
             {
                 device.HornBlow(type);
@@ -243,13 +239,14 @@ namespace Plugin
 
         internal void DoorChange(DoorStates oldState, DoorStates newState)
         {
-            
+            foreach (Device device in devices.Values)
+            {
+                device.DoorChange(oldState, newState);
+            }
         }
 
         internal void SetSignal(SignalData[] signal)
         {
-
-
             foreach (Device device in devices.Values)
             {
                 device.SetSignal(signal);
@@ -258,8 +255,6 @@ namespace Plugin
 
         internal void SetBeacon(BeaconData beacons)
         {
-
-
             foreach (Device device in devices.Values)
             {
                 device.SetBeacon(beacons);

@@ -52,5 +52,7 @@ namespace Plugin
         /// <param name="beacon">The beacon data.</param>
         internal abstract void SetBeacon(BeaconData beacon);
 
+        internal abstract void DoorChange(DoorStates oldState, DoorStates newState);
+
     }
 }

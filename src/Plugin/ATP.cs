@@ -14,20 +14,24 @@ namespace Plugin
         const float ATP_RESTART_DISTANCE = 20.0f; //Distance for preceding train to move before moving off
 
         const bool ATP_FORCE_STATION_STOP = true; //Bring speed code down to 0 at every station
+        const double ATP_STATION_SAFETY_DISTANCE = 15.0f;
+        const double ATP_STATION_TARGET_DISTANCE = 10.0f;
+        private double? upcomingStopLocation = null;
 
         private Train train;
 
         private double currentLocation;
 
-        private enum AtpStates
+
+       /* private enum AtpStates
         {
             Off,
             Active,
             Tripped
-        }
-        private double ATP_WARNING_DURATION = 3.0;
-        private AtpStates atpState = AtpStates.Off;
-        double? atpTripTimer = null;
+        }*/
+        //private double ATP_WARNING_DURATION = 3.0;
+        //private AtpStates atpState = AtpStates.Off;
+        //double? atpTripTimer = null;
 
         public ATP(Train train)
         {
@@ -42,35 +46,51 @@ namespace Plugin
             //Distance to next train
             UpdateAtpSpeeds(data, data.PrecedingVehicle);
 
+            //Naive overspeed prevention that applies FSB
+            if(train.trainModeActual == Train.TrainModes.CodedManual)
+            {
+                if(data.Vehicle.Speed.KilometersPerHour > train.atpSafetySpeed + 2)
+                {
+                    return -train.specs.BrakeNotches;
+                }
+                else if(data.Vehicle.Speed.KilometersPerHour > train.atpSafetySpeed)
+                {
+                    return 0;
+                }
+            }
+
+            return null;
             //Check trip count
             //Check for speed limits
-            ElapseTripTimer(data);
-            
+            //ElapseTripTimer(data);
+
             //Is train in RM?
-            if (train.trainModeActual == Train.TrainModes.RestrictedManualForward ||
+            /*if (train.trainModeActual == Train.TrainModes.RestrictedManualForward ||
                 train.trainModeActual == Train.TrainModes.RestrictedManualReverse ||
                 train.trainModeActual == Train.TrainModes.Off)
             {
                 atpState = AtpStates.Off;
             }
-
-            switch (atpState)
+            else
             {
-                case AtpStates.Active:
-                    if (atpTripTimer <= 0.0)
-                    {
-                        atpState = AtpStates.Tripped;
-                    }
-                    return null;
-                case AtpStates.Tripped:
+                switch (atpState)
+                {
+                    case AtpStates.Active:
+                        if (atpTripTimer <= 0.0)
+                        {
+                            atpState = AtpStates.Tripped;
+                        }
+                        return null;
+                    case AtpStates.Tripped:
 
-                    return -train.specs.BrakeNotches - 1;
-                default:
-                    return null;
-            }
+                        return -train.specs.BrakeNotches - 1;
+                    default:
+                        return null;
+                }
+            }*/
         }
 
-        internal void ElapseTripTimer(ElapseData data)
+        /*internal void ElapseTripTimer(ElapseData data)
         {
             if (atpTripTimer != null)
             {
@@ -85,41 +105,58 @@ namespace Plugin
             {
                 atpTripTimer = ATP_WARNING_DURATION;
             }
-        }
+        }*/
 
         internal void UpdateAtpSpeeds(ElapseData data, PrecedingVehicleState precedingVehicle)
         {
             if (train.atpTrackNextSpeedPosition >= data.Vehicle.Location)
             {
+                //Calculate braking curve to upcoming speed limit
                 double newTargetSpeed = CalculateSpeedToStop(ATP_TARGET_DECELERATION_RATE, (train.atpTrackNextSpeedPosition - data.Vehicle.Location), train.atpTrackNextTargetSpeed);
                 double newSafetySpeed = CalculateSpeedToStop(ATP_SAFETY_DECELERATION_RATE, (train.atpTrackNextSpeedPosition - data.Vehicle.Location), train.atpTrackNextSafetySpeed);
 
+                //Select whichever speed is lower
                 train.atpTrackTargetSpeed = Math.Min(newTargetSpeed, train.atpTrackTargetSpeed);
                 train.atpTrackSafetySpeed = Math.Min(newSafetySpeed, train.atpTrackSafetySpeed);
             }
-            else
-            {
-            }
 
-            if (precedingVehicle == null)
+            if (ATP_FORCE_STATION_STOP)
             {
-                train.atpTargetSpeed = train.atpTrackTargetSpeed;
-                train.atpSafetySpeed = train.atpTrackSafetySpeed;
-            }
-            else
-            {
-                double distanceToStop = precedingVehicle.Distance - ATP_TARGET_STOPPING_DISTANCE;
-
-                train.atpTargetSpeed = Math.Max(Math.Min(CalculateSpeedToStop(ATP_TARGET_DECELERATION_RATE, distanceToStop), train.atpTrackTargetSpeed), 0.0);
-                if(Double.IsNaN(train.atpTargetSpeed))
+                if (upcomingStopLocation.HasValue)
                 {
-                    throw new ApplicationException();
+                    //Calculate braking curve to upcoming station stop
+                    double newTargetSpeed = CalculateSpeedToStop(ATP_TARGET_DECELERATION_RATE, (upcomingStopLocation.Value + ATP_STATION_TARGET_DISTANCE - data.Vehicle.Location), 0);
+                    double newSafetySpeed = CalculateSpeedToStop(ATP_SAFETY_DECELERATION_RATE, (upcomingStopLocation.Value + ATP_STATION_SAFETY_DISTANCE - data.Vehicle.Location), 0);
+
+                    //Select whichever speed is lower
+                    train.atpTargetSpeed = Math.Min(newTargetSpeed, train.atpTrackTargetSpeed);
+                    train.atpSafetySpeed = Math.Min(newSafetySpeed, train.atpTrackSafetySpeed);
                 }
-                
-                train.atpSafetySpeed = Math.Min(CalculateSpeedToStop(ATP_SAFETY_DECELERATION_RATE, (precedingVehicle.Distance - ATP_SAFETY_STOPPING_DISTANCE)), train.atpTrackSafetySpeed);
-                if (Double.IsNaN(train.atpSafetySpeed))
+                else
                 {
-                    throw new ApplicationException();
+                    train.atpTargetSpeed = train.atpTrackTargetSpeed;
+                    train.atpSafetySpeed = train.atpTrackSafetySpeed;
+                }
+            }
+
+            if (precedingVehicle != null)
+            {
+                if (ATP_FORCE_STATION_STOP && (upcomingStopLocation - currentLocation) > precedingVehicle.Distance)
+                {
+                    //Calculate distance to next train
+                    double distanceToStop = precedingVehicle.Distance - ATP_TARGET_STOPPING_DISTANCE;
+
+                    train.atpTargetSpeed = Math.Max(Math.Min(CalculateSpeedToStop(ATP_TARGET_DECELERATION_RATE, distanceToStop), train.atpTrackTargetSpeed), 0.0);
+                    if (Double.IsNaN(train.atpTargetSpeed))
+                    {
+                        throw new ApplicationException();
+                    }
+
+                    train.atpSafetySpeed = Math.Min(CalculateSpeedToStop(ATP_SAFETY_DECELERATION_RATE, (precedingVehicle.Distance - ATP_SAFETY_STOPPING_DISTANCE)), train.atpTrackSafetySpeed);
+                    if (Double.IsNaN(train.atpSafetySpeed))
+                    {
+                        throw new ApplicationException();
+                    }
                 }
             }
         }
@@ -166,16 +203,20 @@ namespace Plugin
 
         internal override void SetBeacon(BeaconData beacon)
         {
-            if(beacon.Type == 32) //Upcoming target and safety track speeds
+            if (beacon.Type == 31) //Target and safety track speeds
+            {
+                train.atpTrackTargetSpeed = (int)(beacon.Optional / 1000);
+                train.atpTrackSafetySpeed = (int)(beacon.Optional % 1000);
+            }
+            if (beacon.Type == 32) //Upcoming target and safety track speeds
             {
                 train.atpTrackNextSpeedPosition = (int)(beacon.Optional / 1000000) + currentLocation;
                 train.atpTrackNextTargetSpeed = (int)((int)(beacon.Optional / 1000) % 1000);
                 train.atpTrackNextSafetySpeed = (int)(beacon.Optional % 1000);
             }
-            if (beacon.Type == 31) //Target and safety track speeds
+            if (beacon.Type == 33) //Distance to stop point
             {
-                train.atpTrackTargetSpeed = (int)(beacon.Optional / 1000);
-                train.atpTrackSafetySpeed = (int)(beacon.Optional % 1000);
+                upcomingStopLocation = beacon.Optional + currentLocation;
             }
         }
 
@@ -198,5 +239,12 @@ namespace Plugin
         {
 
         }
+
+        internal override void DoorChange(DoorStates oldState, DoorStates newState)
+        {
+            //Door open or closed; reset next stop
+            upcomingStopLocation = null;
+        }
+
     }
 }

@@ -5,7 +5,8 @@ namespace Plugin
 {
     internal class Mode_ATO : Device
     {
-        const float ACCELERATION_POLL_RATE = 0.0f; //sec
+        //C751A
+        /*const float ACCELERATION_POLL_RATE = 0.0f; //sec
         const float ATO_TARGET_DECELERATION_RATE = -0.7f; //m/s
         const float ATO_TIME_BETWEEN_NOTCH_CHANGE = 0.10f;
         const float ATO_FRICTION_BRAKING_CUT_IN = 3.0f; //m/s
@@ -14,6 +15,22 @@ namespace Plugin
         const float ATO_LEVELLING_DECELERATION_RATE = -0.30f;
         const float ATO_LEVELLING_DISTANCE = 5.0f;
         const float ATO_LEVELLING_TOLERANCE = 0.1f; //m
+        const float ATO_LEVELLING_CRAWL_SPEED = 0.5f; //m/s
+        const float ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE = 0.10f;
+        const float ATO_POWERING_AMOUNT = 0.5f;
+        const float ATO_BRAKING_AMOUNT = 0.1f;
+        const float ATO_READY_TIMER = 1.0f;*/
+
+        //C830
+        const float ACCELERATION_POLL_RATE = 0.0f; //sec
+        const float ATO_TARGET_DECELERATION_RATE = -0.65f; //m/s
+        const float ATO_TIME_BETWEEN_NOTCH_CHANGE = 0.15f;
+        const float ATO_FRICTION_BRAKING_CUT_IN = 3.0f; //m/s
+        const float ATO_BRAKING_TOLERANCE = 0.5f; //m
+        const float ATO_LEVELLING_SPEED = 1.0f; //m/s
+        const float ATO_LEVELLING_DECELERATION_RATE = -0.30f;
+        const float ATO_LEVELLING_DISTANCE = 4.0f;
+        const float ATO_LEVELLING_TOLERANCE = 0.2f; //m
         const float ATO_LEVELLING_CRAWL_SPEED = 0.5f; //m/s
         const float ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE = 0.10f;
         const float ATO_POWERING_AMOUNT = 0.5f;
@@ -325,6 +342,11 @@ namespace Plugin
         }
 
         internal override void SetSignal(SignalData[] signal)
+        {
+
+        }
+
+        internal override void DoorChange(DoorStates oldState, DoorStates newState)
         {
 
         }

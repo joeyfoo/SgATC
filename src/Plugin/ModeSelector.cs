@@ -108,7 +108,12 @@ namespace Plugin
 
         internal override void SetSignal(SignalData[] signal)
         {
-            
+
+        }
+
+        internal override void DoorChange(DoorStates oldState, DoorStates newState)
+        {
+
         }
     }
 }
