@@ -45,6 +45,8 @@ namespace Plugin
         internal double temp1 = 0;
 
         internal Dictionary<string, Device> devices = new Dictionary<string, Device>();
+
+        public PlaySoundDelegate PlaySound;
         
         internal Train(int[] panel, PlaySoundDelegate playSound)
         {
@@ -55,6 +57,8 @@ namespace Plugin
             //devices.Add("rm", new Mode_RM(this));
             devices.Add("ato", new Mode_ATO(this));
             devices.Add("atp", new ATP(this));
+
+            PlaySound = playSound;
         }
 
         internal void Elapse(ElapseData data)

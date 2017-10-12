@@ -14,9 +14,13 @@ namespace Plugin
         const float ATP_RESTART_DISTANCE = 20.0f; //Distance for preceding train to move before moving off
 
         const bool ATP_FORCE_STATION_STOP = true; //Bring speed code down to 0 at every station
-        const double ATP_STATION_SAFETY_DISTANCE = 15.0f;
-        const double ATP_STATION_TARGET_DISTANCE = 10.0f;
+        const double ATP_STATION_SAFETY_DISTANCE = 4.0f;
+        const double ATP_STATION_TARGET_DISTANCE = 2.0f;
         private double? upcomingStopLocation = null;
+
+        const double ATP_OVERSPEED_ALERT_THRESHOLD = 3.0f;
+        const double ATP_OVERSPEED_COAST_THRESHOLD = 1.0f;
+        SoundHandle atpOverspeedSoundHandle = null;
 
         private Train train;
 
@@ -49,13 +53,30 @@ namespace Plugin
             //Naive overspeed prevention that applies FSB
             if(train.trainModeActual == Train.TrainModes.CodedManual)
             {
-                if(data.Vehicle.Speed.KilometersPerHour > train.atpSafetySpeed + 2)
+                if(data.Vehicle.Speed.KilometersPerHour > train.atpSafetySpeed)
                 {
                     return -train.specs.BrakeNotches;
                 }
-                else if(data.Vehicle.Speed.KilometersPerHour > train.atpSafetySpeed)
+                else if(data.Vehicle.Speed.KilometersPerHour > train.atpSafetySpeed - ATP_OVERSPEED_COAST_THRESHOLD)
                 {
                     return 0;
+                }
+
+                if(data.Vehicle.Speed.KilometersPerHour > train.atpSafetySpeed - ATP_OVERSPEED_ALERT_THRESHOLD)
+                {
+                    //play sound
+                    if(atpOverspeedSoundHandle == null)
+                    {
+                        atpOverspeedSoundHandle = train.PlaySound(0, 1, 1, true);
+                    }
+                }
+                else
+                {
+                    if (atpOverspeedSoundHandle != null)
+                    {
+                        atpOverspeedSoundHandle.Stop();
+                        atpOverspeedSoundHandle = null;
+                    }
                 }
             }
 
