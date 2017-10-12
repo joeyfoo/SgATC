@@ -7,7 +7,7 @@ namespace Plugin
     {
         private Train train;
         private Train.TrainModes? trainModeNew = null;
-        const float CHANGE_MODE_TIMER = 2.0f;
+        const float CHANGE_MODE_TIMER = 1.0f;
         private float changeModeTimer = 0;
 
         public ModeSelector(Train train)
@@ -68,6 +68,7 @@ namespace Plugin
                 if ((int)train.trainModeSelected < train.trainModeCount - 1)
                 {
                     trainModeNew = train.trainModeSelected + 1;
+                    train.PlaySound(24, 1, 1, false);
                 }
             }
             else if (key == VirtualKeys.C2) //Mode Down
@@ -75,6 +76,7 @@ namespace Plugin
                 if ((int)train.trainModeSelected > 0)
                 {
                     trainModeNew = train.trainModeSelected - 1;
+                    train.PlaySound(24, 1, 1, false);
                 }
             }
 
