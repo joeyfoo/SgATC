@@ -52,9 +52,9 @@ namespace Plugin
         {
             this.panel = panel;
 
-            devices.Add("internlock", new Interlock(this));
+            devices.Add("interlock", new Interlock(this));
             devices.Add("modeselector", new ModeSelector(this));
-            //devices.Add("rm", new Mode_RM(this));
+            devices.Add("rm", new Mode_RM(this));
             devices.Add("ato", new Mode_ATO(this));
             devices.Add("atp", new ATP(this));
 
