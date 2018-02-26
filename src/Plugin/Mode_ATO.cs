@@ -29,7 +29,7 @@ namespace Plugin
         const float ATO_BRAKING_TOLERANCE = 0.5f; //m
         const float ATO_LEVELLING_SPEED = 1.0f; //m/s
         const float ATO_LEVELLING_DECELERATION_RATE = -0.30f;
-        const float ATO_LEVELLING_DISTANCE = 4.0f;
+        const float ATO_LEVELLING_DISTANCE = 3.0f;
         const float ATO_LEVELLING_TOLERANCE = 0.2f; //m
         const float ATO_LEVELLING_CRAWL_SPEED = 0.5f; //m/s
         const float ATO_TIME_BETWEEN_LEVELLING_NOTCH_CHANGE = 0.10f;
@@ -44,6 +44,7 @@ namespace Plugin
             Stopped
         }
         private AtoStates atoState = AtoStates.Ready;
+
         private Train train;
         private double accelerationRate = 0.0;
         private double accelerationLastSpeed = 0.0;
@@ -55,6 +56,9 @@ namespace Plugin
         private int? atoReceivedData = null;
         internal int? atoDemands = null;
 
+        private double? lastFrameTrackPosition = null;
+        const float STATION_JUMP_THRESHOLD_DISTANCE = 200;
+
         public Mode_ATO(Train train)
         {
             this.train = train;
@@ -63,11 +67,29 @@ namespace Plugin
         internal override int? Elapse(ElapseData data)
         {
             train.debugMessage = "";
+
+            //Detect jump to station
+            if(lastFrameTrackPosition != null)
+            {
+                if(Math.Abs(lastFrameTrackPosition.Value - data.Vehicle.Location) > STATION_JUMP_THRESHOLD_DISTANCE)
+                {
+                    //Reset ATO stopping pos
+                    atoStoppingPosition = null;
+                }
+            }
+            lastFrameTrackPosition = data.Vehicle.Location;
+
             //Is train in Auto?
-            if (train.trainModeActual != Train.TrainModes.Auto)
+            if (train.trainModeSelected != Train.TrainModes.Auto)
             {
                 atoState = AtoStates.Stopped;
                 return null;
+            }
+
+            if (atoState == AtoStates.Stopped)
+            {
+                atoStoppingPosition = null;
+                return -train.specs.BrakeNotches;
             }
 
             //Calculate current acceleration rate
@@ -91,13 +113,16 @@ namespace Plugin
                 atoDemands = -train.specs.BrakeNotches;
 
                 readyTimer -= data.ElapsedTime.Seconds;
-                if (train.doorState != DoorStates.None)
-                {
-                    atoState = AtoStates.Stopped;
-                }
-                else if (readyTimer <= 0.0)
+
+                if (readyTimer <= 0.0)
                 {
                     atoState = AtoStates.Enroute;
+                }
+
+                //Reset stop pos if closer than 25m
+                else if (atoStoppingPosition != null && distanceToNextStop < 25)
+                {
+                    atoStoppingPosition = null;
                 }
             }
             else if (atoState == AtoStates.Enroute)
@@ -118,27 +143,16 @@ namespace Plugin
                 //Select the lowest notch between "TASC" and the target speed code above
                 int notch = (atoDemands ?? 0) + Math.Min(atoStoppingDemand ?? train.specs.PowerNotches, atoTargetSpeedDemand);
 
+                //Limit powering below 2km/h
+                if(data.Vehicle.Speed.KilometersPerHour < 2.0)
+                {
+                    notch = Math.Min(notch, 1);
+                }
+
                 //Call ChangeAtoDemands with appropriate time between notch 
                 ChangeAtoDemands(data, notch, ATO_TIME_BETWEEN_NOTCH_CHANGE, true, true);
 
                 train.debugMessage = $"Enroute. TS {atoTargetSpeedDemand}, TASC {atoStoppingDemand}. Req {notch}. Actual {atoDemands}. Target speed {train.atpTargetSpeed}";
-
-                //If doors open
-                if (train.doorState != DoorStates.None)
-                {
-                    atoState = AtoStates.Stopped;
-                }
-            }
-            else if (atoState == AtoStates.Stopped)
-            {
-                atoStoppingPosition = null;
-                atoDemands = -train.specs.BrakeNotches;
-
-                if (train.doorState == DoorStates.None)
-                {
-                    atoState = AtoStates.Ready;
-                    readyTimer = ATO_READY_TIMER;
-                }
             }
 
             if (atoReceivedData != null)
@@ -295,6 +309,7 @@ namespace Plugin
 
         internal override void Initialize(InitializationModes mode)
         {
+            atoStoppingPosition = null;
         }
 
         internal override void HornBlow(HornTypes type)
@@ -348,7 +363,16 @@ namespace Plugin
 
         internal override void DoorChange(DoorStates oldState, DoorStates newState)
         {
-
+            if(oldState == DoorStates.None && newState != DoorStates.None)
+            {
+                atoState = AtoStates.Stopped;
+            }
+            else if(oldState != DoorStates.None && newState == DoorStates.None)
+            {
+                //Door closed
+                atoState = AtoStates.Ready;
+                readyTimer = ATO_READY_TIMER;
+            }
         }
     }
 }

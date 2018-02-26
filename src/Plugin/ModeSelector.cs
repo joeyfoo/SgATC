@@ -37,12 +37,15 @@ namespace Plugin
                         changeModeTimer = 0.0f;
                         train.trainModeActual = train.trainModeSelected;
                     }
+
+                    return -train.specs.BrakeNotches;
                 }
                 else
                 {
                     return -train.specs.BrakeNotches;
                 }
             }
+
             return null;
         }
 

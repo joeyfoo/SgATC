@@ -74,6 +74,8 @@ namespace Plugin
                 demands.Add(data.Handles.PowerNotch - data.Handles.BrakeNotch);
             }
 
+            data.DebugMessage = "";
+
             foreach (Device device in devices.Values)
             {
                 int? d = device.Elapse(data);
@@ -81,7 +83,10 @@ namespace Plugin
                 {
                     demands.Add(d.Value);
                 }
+
+                data.DebugMessage += " " + d?.ToString();
             }
+
 
             //Override reverser
             switch(trainModeActual)
@@ -151,15 +156,15 @@ namespace Plugin
             panel[3] = (int)atpTargetSpeed;
 
             //Print debug message
-            data.DebugMessage = "Selected mode: " + panel[1] + " " + trainModeSelected;
+            //data.DebugMessage = "Selected mode: " + panel[1] + " " + trainModeSelected;
             //data.DebugMessage += "\nDoors: " + doorState;
-            data.DebugMessage += "\nDemands: ";
-            foreach (int x in demands)
-            {
-                data.DebugMessage += x + ", ";
-            }
-            data.DebugMessage = debugMessage;
-            data.DebugMessage = $"Safety/target speeds are {atpTrackSafetySpeed}/{atpTrackTargetSpeed}"; 
+            //data.DebugMessage += "\nDemands: ";
+            //foreach (int x in demands)
+            //{
+            //    data.DebugMessage += x + ", ";
+            //}
+            //data.DebugMessage = debugMessage;
+            //data.DebugMessage = $"Safety/target speeds are {atpTrackSafetySpeed}/{atpTrackTargetSpeed}"; 
             //
             //data.DebugMessage= data.DebugMessage.Replace("\n",Environment.NewLine);
         }
