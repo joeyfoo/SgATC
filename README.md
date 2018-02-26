@@ -3,7 +3,26 @@ Singapore ATC train plugin for openBVE
 
 ## Readme
 
-(README to be completed later)
+SgATC is a plugin that currently simulates a representation of the CBTC signalling system used on the North East Line and Circle Line. 
+
+### Objective
+
+The objective of this plugin is not to provide a training-grade simulation of the signalling systems, but rather to provide a simplified system suitable for implementation in a game add-on. 
+
+### Current implementation
+
+The current plugin roughly simulates the Alstom Urbalis 300 CBTC system used on the Circle Line. 
+
+This plugin is included in the Alstom Metropolis C830/C830C add-on by SMB142J. 
+
+### Roadmap
+
+* **Plugin rewrite**: Code quality in the current plugin isn't up-to-standard, and a rewrite is planned, pending free time/motivation. 
+* **NSEWL Westinghouse ATP/SelTrac support**: The plugin may be extended to simulate other signalling systems such as the legacy Westinghouse ATP and new Thales SelTrac signalling systems used on the North South and East West Lines (NSEWL). 
+
+### Documentation
+
+https://github.com/joeyfoo/SgATC/wiki
 
 ## License
 
