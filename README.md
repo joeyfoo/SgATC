@@ -26,7 +26,7 @@ https://github.com/joeyfoo/SgATC/wiki
 
 ## License
 
-Copyright 2015 Joey Foo
+Copyright 2015-2018 Joey Foo
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
